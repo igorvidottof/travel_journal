@@ -19,6 +19,10 @@ current code and README before relying on older conversation suggestions.
   implement unrelated features.
 - Keep explanations practical and concise. Report what changed, how it was
   verified, and any remaining limitations. Do not claim checks that were not run.
+- Always include a concise comparison of the relevant iOS/Cupertino specifics
+  with Material Design, naming equivalent Flutter widgets where available and
+  explaining meaningful interaction differences. If a task has no UI impact,
+  state that there are no new platform-specific UI differences to report.
 
 ## Project scope and current baseline
 
