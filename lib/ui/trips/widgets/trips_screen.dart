@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../view_models/trips_view_model.dart';
 import 'create_trip_screen.dart';
+import 'trip_details_screen.dart';
 
 class TripsScreen extends ConsumerWidget {
   const TripsScreen({super.key});
@@ -65,6 +66,14 @@ class TripsScreen extends ConsumerWidget {
                         for (final trip in trips)
                           CupertinoListTile.notched(
                             key: ValueKey(trip.id),
+                            trailing: const CupertinoListTileChevron(),
+                            onTap: () => Navigator.of(context).push<void>(
+                              CupertinoPageRoute<void>(
+                                title: 'Trip Details',
+                                builder: (context) =>
+                                    TripDetailsScreen(tripId: trip.id),
+                              ),
+                            ),
                             title: Text(
                               trip.name,
                               maxLines: 2,
