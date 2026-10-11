@@ -7,6 +7,7 @@ import '../../../domain/models/trip.dart';
 import '../../../domain/models/trip_photo.dart';
 import '../view_models/trip_photos_view_model.dart';
 import '../view_models/trips_view_model.dart';
+import 'trip_location_screen.dart';
 
 class TripDetailsScreen extends ConsumerWidget {
   const TripDetailsScreen({super.key, required this.tripId});
@@ -135,6 +136,29 @@ class _TripDetails extends ConsumerWidget {
             _DetailRow(
               label: 'Duration',
               value: '$days ${days == 1 ? 'day' : 'days'}',
+            ),
+          ],
+        ),
+        CupertinoListSection.insetGrouped(
+          header: const Text('LOCATION'),
+          hasLeading: false,
+          children: [
+            CupertinoListTile(
+              title: Text(
+                trip.location == null
+                    ? 'Add Trip Location'
+                    : 'View or Change Location',
+              ),
+              subtitle: Text(
+                trip.location?.label ??
+                    'Choose a pin or use your current location',
+              ),
+              trailing: const CupertinoListTileChevron(),
+              onTap: () => Navigator.of(context).push<void>(
+                CupertinoPageRoute(
+                  builder: (context) => TripLocationScreen(tripId: trip.id),
+                ),
+              ),
             ),
           ],
         ),

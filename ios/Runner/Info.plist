@@ -2,6 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Travel Journal uses your location when you choose to mark a trip on the map.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Travel Journal uses the camera to take photos for your trip memories.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
