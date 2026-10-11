@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/dependencies.dart';
@@ -22,9 +20,9 @@ final tripDetailsProvider = Provider.autoDispose
 
 class TripsViewModel extends AsyncNotifier<List<Trip>> {
   @override
-  FutureOr<List<Trip>> build() {
+  Future<List<Trip>> build() async {
     final repository = ref.watch(tripRepositoryProvider);
-    return List<Trip>.unmodifiable(repository.getTrips());
+    return List<Trip>.unmodifiable(await repository.getTrips());
   }
 
   /// Reload through build; AsyncValue exposes loading, data, and errors.

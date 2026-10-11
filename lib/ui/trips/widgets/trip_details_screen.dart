@@ -82,6 +82,37 @@ class _TripDetails extends ConsumerWidget {
         .selectPhoto(source);
   }
 
+  Future<void> _deletePhoto(
+    BuildContext context,
+    WidgetRef ref,
+    TripPhoto photo,
+  ) async {
+    final confirmed = await showCupertinoDialog<bool>(
+      context: context,
+      builder: (context) => CupertinoAlertDialog(
+        title: const Text('Delete Photo?'),
+        content: const Text(
+          'This permanently removes the saved photo from this trip.',
+        ),
+        actions: [
+          CupertinoDialogAction(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          CupertinoDialogAction(
+            isDestructiveAction: true,
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+    await ref
+        .read(tripPhotosViewModelProvider(trip.id).notifier)
+        .deletePhoto(photo.id);
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final photos = ref.watch(tripPhotosViewModelProvider(trip.id));
@@ -115,7 +146,11 @@ class _TripDetails extends ConsumerWidget {
               padding: const EdgeInsets.all(24),
               child: Column(
                 children: [
-                  if (photos.photos.isEmpty) ...[
+                  if (photos.isLoading) ...[
+                    const CupertinoActivityIndicator(),
+                    const SizedBox(height: 8),
+                    const Text('Loading saved photos…'),
+                  ] else if (photos.photos.isEmpty && !photos.loadFailed) ...[
                     Icon(
                       CupertinoIcons.photo,
                       size: 40,
@@ -138,16 +173,33 @@ class _TripDetails extends ConsumerWidget {
                       'Your trip photos will appear here.',
                       textAlign: TextAlign.center,
                     ),
-                  ] else ...[
+                  ] else if (photos.photos.isNotEmpty) ...[
                     for (final photo in photos.photos)
                       Padding(
                         padding: const EdgeInsets.only(bottom: 12),
-                        child: _PhotoPreview(path: photo.path),
+                        child: Column(
+                          children: [
+                            _PhotoPreview(
+                              path: photo.path,
+                              isMissing: photo.isMissing,
+                            ),
+                            CupertinoButton(
+                              onPressed: photos.isBusy || photos.loadFailed
+                                  ? null
+                                  : () => _deletePhoto(context, ref, photo),
+                              child: photos.deletingPhotoId == photo.id
+                                  ? const CupertinoActivityIndicator()
+                                  : Text(
+                                      'Delete Photo',
+                                      style: TextStyle(
+                                        color: CupertinoColors.systemRed
+                                            .resolveFrom(context),
+                                      ),
+                                    ),
+                            ),
+                          ],
+                        ),
                       ),
-                    const Text(
-                      'Photos are temporary and will be cleared when you leave this screen.',
-                      textAlign: TextAlign.center,
-                    ),
                   ],
                   if (photos.error != null) ...[
                     const SizedBox(height: 12),
@@ -162,14 +214,25 @@ class _TripDetails extends ConsumerWidget {
                       ),
                     ),
                   ],
+                  if (photos.error != null)
+                    CupertinoButton(
+                      onPressed: photos.isBusy
+                          ? null
+                          : ref
+                                .read(
+                                  tripPhotosViewModelProvider(trip.id).notifier,
+                                )
+                                .loadPhotos,
+                      child: const Text('Reload Photos'),
+                    ),
                   const SizedBox(height: 16),
                   CupertinoButton.filled(
-                    onPressed: photos.isSelecting
+                    onPressed: photos.isBusy || photos.loadFailed
                         ? null
                         : () => _addPhoto(context, ref),
                     child: photos.isSelecting
                         ? Semantics(
-                            label: 'Selecting photo',
+                            label: 'Selecting and saving photo',
                             liveRegion: true,
                             child: const CupertinoActivityIndicator(),
                           )
@@ -186,9 +249,10 @@ class _TripDetails extends ConsumerWidget {
 }
 
 class _PhotoPreview extends StatelessWidget {
-  const _PhotoPreview({required this.path});
+  const _PhotoPreview({required this.path, required this.isMissing});
 
   final String path;
+  final bool isMissing;
 
   @override
   Widget build(BuildContext context) {
@@ -198,25 +262,28 @@ class _PhotoPreview extends StatelessWidget {
         aspectRatio: 4 / 3,
         child: ColoredBox(
           color: CupertinoColors.tertiarySystemFill.resolveFrom(context),
-          child: Image.file(
-            File(path),
-            fit: BoxFit.cover,
-            cacheWidth: 1200,
-            semanticLabel: 'Selected trip photo',
-            frameBuilder: (context, child, frame, wasSynchronouslyLoaded) =>
-                frame != null || wasSynchronouslyLoaded
-                ? child
-                : const Center(child: CupertinoActivityIndicator()),
-            errorBuilder: (context, error, stackTrace) => const Center(
-              child: Padding(
-                padding: EdgeInsets.all(16),
-                child: Text(
-                  'Unable to preview this photo. Try selecting it again.',
-                  textAlign: TextAlign.center,
+          child: isMissing
+              ? const Center(child: Text('This saved photo file is missing.'))
+              : Image.file(
+                  File(path),
+                  fit: BoxFit.cover,
+                  cacheWidth: 1200,
+                  semanticLabel: 'Saved trip photo',
+                  frameBuilder:
+                      (context, child, frame, wasSynchronouslyLoaded) =>
+                          frame != null || wasSynchronouslyLoaded
+                          ? child
+                          : const Center(child: CupertinoActivityIndicator()),
+                  errorBuilder: (context, error, stackTrace) => const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(16),
+                      child: Text(
+                        'Unable to preview this photo. Try selecting it again.',
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ),
                 ),
-              ),
-            ),
-          ),
         ),
       ),
     );

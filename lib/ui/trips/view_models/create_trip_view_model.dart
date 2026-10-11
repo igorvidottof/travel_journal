@@ -51,7 +51,7 @@ class CreateTripViewModel extends Notifier<CreateTripState> {
     return null;
   }
 
-  /// Use a monotonic counter to avoid collisions in the in-memory session.
+  /// Timestamp-based IDs remain stable when trip records are persisted.
   static String _generateId() {
     final timestamp = DateTime.now().microsecondsSinceEpoch;
     _lastId = timestamp > _lastId ? timestamp : _lastId + 1;

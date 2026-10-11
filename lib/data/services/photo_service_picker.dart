@@ -2,9 +2,9 @@ import 'package:image_picker/image_picker.dart';
 
 import '../../domain/models/trip_photo.dart';
 
-/// Wraps the native picker without copying photos to permanent storage.
-class PhotoService {
-  PhotoService({ImagePicker? picker}) : _picker = picker ?? ImagePicker();
+/// Wraps the native picker; the repository copies results to permanent storage.
+class PhotoServicePicker {
+  PhotoServicePicker({ImagePicker? picker}) : _picker = picker ?? ImagePicker();
 
   final ImagePicker _picker;
 

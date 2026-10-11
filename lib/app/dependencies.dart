@@ -1,19 +1,33 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../data/repositories/in_memory_trip_repository.dart';
+import '../data/repositories/trip_repository_persistent.dart';
 import '../data/repositories/photo_repository.dart';
-import '../data/repositories/picker_photo_repository.dart';
+import '../data/repositories/photo_repository_picker.dart';
 import '../data/repositories/trip_repository.dart';
-import '../data/services/photo_service.dart';
+import '../data/services/storage_service_local.dart';
+import '../data/services/photo_service_picker.dart';
+import '../data/services/photo_storage_service_local.dart';
 
-final photoServiceProvider = Provider<PhotoService>((ref) => PhotoService());
-
-final photoRepositoryProvider = Provider<PhotoRepository>(
-  (ref) => PickerPhotoRepository(ref.watch(photoServiceProvider)),
+final storageServiceLocalProvider = Provider<StorageServiceLocal>(
+  (ref) => StorageServiceLocal(),
 );
 
-// Keep the repository alive for the app scope so in-memory trips survive
-// disposal of feature view models. Both view models use this same provider.
+final photoServicePickerProvider = Provider<PhotoServicePicker>(
+  (ref) => PhotoServicePicker(),
+);
+
+final photoStorageServiceLocalProvider = Provider<PhotoStorageServiceLocal>(
+  (ref) => PhotoStorageServiceLocal(ref.watch(storageServiceLocalProvider)),
+);
+
+// App-scoped repositories serialize operations across transient view models.
+final photoRepositoryProvider = Provider<PhotoRepository>(
+  (ref) => PhotoRepositoryPicker(
+    ref.watch(photoServicePickerProvider),
+    ref.watch(photoStorageServiceLocalProvider),
+  ),
+);
+
 final tripRepositoryProvider = Provider<TripRepository>(
-  (ref) => InMemoryTripRepository(),
+  (ref) => TripRepositoryPersistent(ref.watch(storageServiceLocalProvider)),
 );

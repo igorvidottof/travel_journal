@@ -1,11 +1,11 @@
 import '../../domain/models/trip.dart';
 import 'trip_repository.dart';
 
-class InMemoryTripRepository implements TripRepository {
+class TripRepositoryInMemory implements TripRepository {
   final List<Trip> _trips = [];
 
   @override
-  List<Trip> getTrips() => List<Trip>.unmodifiable(_trips);
+  Future<List<Trip>> getTrips() async => List<Trip>.unmodifiable(_trips);
 
   @override
   Future<void> addTrip(Trip trip) async {

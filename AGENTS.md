@@ -79,6 +79,16 @@ lib/
   contracts when adding data and implementations for the actual storage or API.
 - Put external I/O, storage, networking, and platform API access in
   `data/services/`. Services must not depend on the UI.
+- Name storage service implementations with the storage type as a suffix:
+  `StorageServiceLocal`, `PhotoStorageServiceLocal`, and, when needed,
+  `PhotoStorageServiceCloud`. Keep an abstract contract's name unsuffixed
+  (for example, `PhotoStorageService`); introduce service contracts when they
+  have a real responsibility rather than solely for a possible future backend.
+- Match service filenames to their class names in `snake_case`, such as
+  `storage_service_local.dart` and `photo_storage_service_local.dart`.
+  Name implementation-specific Riverpod providers in `lowerCamelCase` with
+  `Provider` appended, such as `storageServiceLocalProvider` and
+  `photoStorageServiceLocalProvider`.
 - Put immutable application data models in `domain/models/` as needed. Add domain
   use cases only when logic is complex or shared by multiple view models.
 - Follow unidirectional data flow: services and repositories supply data to view
