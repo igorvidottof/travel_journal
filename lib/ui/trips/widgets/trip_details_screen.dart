@@ -1,7 +1,11 @@
+import 'dart:io';
+
 import 'package:cupertino_ui/cupertino_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../domain/models/trip.dart';
+import '../../../domain/models/trip_photo.dart';
+import '../view_models/trip_photos_view_model.dart';
 import '../view_models/trips_view_model.dart';
 
 class TripDetailsScreen extends ConsumerWidget {
@@ -46,28 +50,41 @@ class TripDetailsScreen extends ConsumerWidget {
   }
 }
 
-class _TripDetails extends StatelessWidget {
+class _TripDetails extends ConsumerWidget {
   const _TripDetails({required this.trip});
 
   final Trip trip;
 
-  Future<void> _addPhoto(BuildContext context) => showCupertinoDialog<void>(
-    context: context,
-    builder: (context) => CupertinoAlertDialog(
-      title: const Text('Add Photo'),
-      content: const Text('Adding photos to your trip is coming soon.'),
-      actions: [
-        CupertinoDialogAction(
-          isDefaultAction: true,
+  Future<void> _addPhoto(BuildContext context, WidgetRef ref) async {
+    final source = await showCupertinoModalPopup<PhotoSource>(
+      context: context,
+      builder: (context) => CupertinoActionSheet(
+        title: const Text('Add Photo'),
+        actions: [
+          CupertinoActionSheetAction(
+            onPressed: () => Navigator.of(context).pop(PhotoSource.camera),
+            child: const Text('Take Photo'),
+          ),
+          CupertinoActionSheetAction(
+            onPressed: () => Navigator.of(context).pop(PhotoSource.library),
+            child: const Text('Choose from Photo Library'),
+          ),
+        ],
+        cancelButton: CupertinoActionSheetAction(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('OK'),
+          child: const Text('Cancel'),
         ),
-      ],
-    ),
-  );
+      ),
+    );
+    if (source == null || !context.mounted) return;
+    await ref
+        .read(tripPhotosViewModelProvider(trip.id).notifier)
+        .selectPhoto(source);
+  }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final photos = ref.watch(tripPhotosViewModelProvider(trip.id));
     final localizations = CupertinoLocalizations.of(context);
     String formatDate(DateTime date) =>
         '${localizations.datePickerMediumDate(date)}, '
@@ -98,30 +115,65 @@ class _TripDetails extends StatelessWidget {
               padding: const EdgeInsets.all(24),
               child: Column(
                 children: [
-                  Icon(
-                    CupertinoIcons.photo,
-                    size: 40,
-                    color: CupertinoColors.secondaryLabel.resolveFrom(context),
-                  ),
-                  const SizedBox(height: 12),
-                  Semantics(
-                    header: true,
-                    child: Text(
-                      'No memories yet',
-                      style: CupertinoTheme.of(
+                  if (photos.photos.isEmpty) ...[
+                    Icon(
+                      CupertinoIcons.photo,
+                      size: 40,
+                      color: CupertinoColors.secondaryLabel.resolveFrom(
                         context,
-                      ).textTheme.navTitleTextStyle,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Your trip photos will appear here.',
-                    textAlign: TextAlign.center,
-                  ),
+                    const SizedBox(height: 12),
+                    Semantics(
+                      header: true,
+                      child: Text(
+                        'No memories yet',
+                        style: CupertinoTheme.of(
+                          context,
+                        ).textTheme.navTitleTextStyle,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Your trip photos will appear here.',
+                      textAlign: TextAlign.center,
+                    ),
+                  ] else ...[
+                    for (final photo in photos.photos)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: _PhotoPreview(path: photo.path),
+                      ),
+                    const Text(
+                      'Photos are temporary and will be cleared when you leave this screen.',
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                  if (photos.error != null) ...[
+                    const SizedBox(height: 12),
+                    Semantics(
+                      liveRegion: true,
+                      child: Text(
+                        photos.error!,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: CupertinoColors.systemRed.resolveFrom(context),
+                        ),
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 16),
                   CupertinoButton.filled(
-                    onPressed: () => _addPhoto(context),
-                    child: const Text('Add Photo'),
+                    onPressed: photos.isSelecting
+                        ? null
+                        : () => _addPhoto(context, ref),
+                    child: photos.isSelecting
+                        ? Semantics(
+                            label: 'Selecting photo',
+                            liveRegion: true,
+                            child: const CupertinoActivityIndicator(),
+                          )
+                        : const Text('Add Photo'),
                   ),
                 ],
               ),
@@ -129,6 +181,44 @@ class _TripDetails extends StatelessWidget {
           ],
         ),
       ],
+    );
+  }
+}
+
+class _PhotoPreview extends StatelessWidget {
+  const _PhotoPreview({required this.path});
+
+  final String path;
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: AspectRatio(
+        aspectRatio: 4 / 3,
+        child: ColoredBox(
+          color: CupertinoColors.tertiarySystemFill.resolveFrom(context),
+          child: Image.file(
+            File(path),
+            fit: BoxFit.cover,
+            cacheWidth: 1200,
+            semanticLabel: 'Selected trip photo',
+            frameBuilder: (context, child, frame, wasSynchronouslyLoaded) =>
+                frame != null || wasSynchronouslyLoaded
+                ? child
+                : const Center(child: CupertinoActivityIndicator()),
+            errorBuilder: (context, error, stackTrace) => const Center(
+              child: Padding(
+                padding: EdgeInsets.all(16),
+                child: Text(
+                  'Unable to preview this photo. Try selecting it again.',
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
