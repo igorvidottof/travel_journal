@@ -1,127 +1,107 @@
-import 'package:flutter/foundation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../data/repositories/trip_repository.dart';
+import '../../../app/dependencies.dart';
 import '../../../domain/models/trip.dart';
+import 'create_trip_state.dart';
+import 'trips_view_model.dart';
 
-class CreateTripViewModel extends ChangeNotifier {
-  CreateTripViewModel({
-    required this._tripRepository,
-    required this._onTripCreated,
-  });
+final createTripViewModelProvider =
+    NotifierProvider.autoDispose<CreateTripViewModel, CreateTripState>(
+      CreateTripViewModel.new,
+    );
 
-  final TripRepository _tripRepository;
-  final VoidCallback _onTripCreated;
+class CreateTripViewModel extends Notifier<CreateTripState> {
   static int _lastId = 0;
 
-  String _name = '';
-  String _destination = '';
-  DateTime? _startDate;
-  DateTime? _endDate;
-  bool _isSaving = false;
-  bool _isDisposed = false;
-  String? _error;
-
-  String get name => _name;
-  String get destination => _destination;
-  DateTime? get startDate => _startDate;
-  DateTime? get endDate => _endDate;
-  bool get isSaving => _isSaving;
-  String? get error => _error;
+  @override
+  CreateTripState build() {
+    ref.watch(tripRepositoryProvider);
+    return const CreateTripState();
+  }
 
   void updateName(String value) {
-    if (_isDisposed || _isSaving || value == _name) return;
-    _name = value;
-    _error = null;
-    notifyListeners();
+    if (state.isSaving || value == state.name) return;
+    state = state.copyWith(name: value);
   }
 
   void updateDestination(String value) {
-    if (_isDisposed || _isSaving || value == _destination) return;
-    _destination = value;
-    _error = null;
-    notifyListeners();
+    if (state.isSaving || value == state.destination) return;
+    state = state.copyWith(destination: value);
   }
 
   void updateStartDate(DateTime? value) {
-    if (_isDisposed || _isSaving || value == _startDate) return;
-    _startDate = value;
-    _error = null;
-    notifyListeners();
+    if (state.isSaving || value == state.startDate) return;
+    state = state.copyWith(startDate: value, clearStartDate: value == null);
   }
 
   void updateEndDate(DateTime? value) {
-    if (_isDisposed || _isSaving || value == _endDate) return;
-    _endDate = value;
-    _error = null;
-    notifyListeners();
+    if (state.isSaving || value == state.endDate) return;
+    state = state.copyWith(endDate: value, clearEndDate: value == null);
   }
 
   String? _validate() {
-    if (_name.trim().isEmpty) return 'Enter a trip name.';
-    if (_destination.trim().isEmpty) return 'Enter a destination.';
-    if (_startDate == null || _endDate == null) {
+    if (state.name.trim().isEmpty) return 'Enter a trip name.';
+    if (state.destination.trim().isEmpty) return 'Enter a destination.';
+    if (state.startDate == null || state.endDate == null) {
       return 'Select the start and end dates.';
     }
-    if (_endDate!.isBefore(_startDate!)) {
+    if (state.endDate!.isBefore(state.startDate!)) {
       return 'The end date must not be earlier than the start date.';
     }
     return null;
   }
 
-  /// Usa um contador monotônico para evitar colisões na sessão em memória.
+  /// Use a monotonic counter to avoid collisions in the in-memory session.
   static String _generateId() {
     final timestamp = DateTime.now().microsecondsSinceEpoch;
     _lastId = timestamp > _lastId ? timestamp : _lastId + 1;
     return _lastId.toString();
   }
 
-  /// Salva a viagem e solicita a atualização da lista após o sucesso.
   Future<bool> saveTrip() async {
-    if (_isDisposed || _isSaving) return false;
+    if (state.isSaving) return false;
 
-    _error = _validate();
-    if (_error != null) {
-      notifyListeners();
+    final error = _validate();
+    if (error != null) {
+      state = state.copyWith(
+        status: TripSubmissionStatus.failure,
+        error: error,
+      );
       return false;
     }
 
+    final repository = ref.read(tripRepositoryProvider);
     final trip = Trip(
       id: _generateId(),
-      name: _name.trim(),
-      destination: _destination.trim(),
-      startDate: _startDate!,
-      endDate: _endDate!,
+      name: state.name.trim(),
+      destination: state.destination.trim(),
+      startDate: state.startDate!,
+      endDate: state.endDate!,
     );
-    _isSaving = true;
-    notifyListeners();
+    // Finish the submission and refresh even if the form loses its listeners.
+    final keepAlive = ref.keepAlive();
+    state = state.copyWith(status: TripSubmissionStatus.saving);
 
     try {
       try {
-        await _tripRepository.addTrip(trip);
+        await repository.addTrip(trip);
       } on Exception {
-        if (!_isDisposed) {
-          _error = 'Unable to save the trip. Please try again.';
+        if (ref.mounted) {
+          state = state.copyWith(
+            status: TripSubmissionStatus.failure,
+            error: 'Unable to save the trip. Please try again.',
+          );
         }
         return false;
       }
 
-      if (!_isDisposed) {
-        _name = '';
-        _destination = '';
-        _startDate = null;
-        _endDate = null;
-        _onTripCreated();
+      if (ref.mounted) {
+        ref.invalidate(tripsViewModelProvider);
+        state = const CreateTripState(status: TripSubmissionStatus.success);
       }
       return true;
     } finally {
-      _isSaving = false;
-      if (!_isDisposed) notifyListeners();
+      keepAlive.close();
     }
-  }
-
-  @override
-  void dispose() {
-    _isDisposed = true;
-    super.dispose();
   }
 }

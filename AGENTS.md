@@ -56,15 +56,21 @@ lib/
 ```
 
 - Keep `main.dart` responsible for initialization and `runApp`. Configure the app
-  and compose dependencies in `lib/app/app.dart`.
+  in `lib/app/app.dart` and declare dependency providers in
+  `lib/app/dependencies.dart`. Wrap the app in `ProviderScope` at startup.
 - Keep feature UI under `ui/<feature>/`, shared UI under `ui/core/`, and preserve
   the existing `*Screen` naming. Earlier chat examples using `features/`, `*Page`,
   or `*View` do not require a rename of the current implementation.
 - Views handle rendering, layout, animation, and simple navigation. Put UI state,
   data transformation, and commands in `ui/<feature>/view_models/` when needed.
-- Use constructor injection. Use Flutter's `ChangeNotifier` and `Listenable` when
-  observable state is needed. Do not introduce GetX or another state-management
-  dependency merely because an earlier conversation mentioned it.
+- Use Riverpod for state management, dependency injection, and lifecycle
+  management. Use `Provider` for repositories and services, and prefer
+  `Notifier`/`AsyncNotifier` with their providers for view models. Access
+  dependencies through `ref.watch` or `ref.read`; do not introduce a separate DI
+  package or another state-management dependency. Keep the in-memory repository
+  alive in the app scope so view models share one instance. Use automatic
+  disposal for transient feature state and `ref.onDispose` for owned resources
+  that require cleanup.
 - Put sources of truth in `data/repositories/`. Define abstract repository
   contracts when adding data and implementations for the actual storage or API.
 - Put external I/O, storage, networking, and platform API access in
@@ -98,11 +104,8 @@ lib/
   the older chat's manual-only validation suggestion.
 - For Dart changes, format the changed files with `dart format` and run
   `flutter analyze`. Respect `analysis_options.yaml` and existing lint rules.
-- When adding behavior, add meaningful automated tests for affected view models,
-  repositories, services, and relevant widget flows, then run the relevant tests
-  with `flutter test`.
-- Documentation-only changes do not need Flutter tests. Do not add tests solely
-  to mirror static placeholders or trivial implementation details.
+- Do not write or execute automated tests at this stage. Validate changes with
+  formatting and static analysis only.
 - If tooling or platform restrictions prevent a check, report the limitation and
   leave a concrete command for validation. Never describe an unverified UI as
   tested.
@@ -111,7 +114,8 @@ lib/
 
 - Inspect `git status` before editing and preserve unrelated or manual changes.
   Keep changes focused on the user's request; avoid broad cleanup or refactoring.
-- Keep README guidance consistent when architecture, setup, or validation changes.
+- Do not edit `README.md` unless the user explicitly asks you to. Architecture,
+  setup, or validation changes do not authorize README updates on their own.
 - Do not modify generated platform files, signing settings, or dependency versions
   without a concrete need for the requested work.
 - Use Conventional Commits when suggesting or creating commits: `feat` for new
