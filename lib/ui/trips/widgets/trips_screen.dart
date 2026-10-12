@@ -1,7 +1,11 @@
 import 'package:cupertino_ui/cupertino_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../domain/models/trip.dart';
 import '../view_models/trips_view_model.dart';
+import '../view_models/trip_deletion_view_model.dart';
+import 'trip_deletion_dialogs.dart';
+import 'trip_swipe_action.dart';
 import 'create_trip_screen.dart';
 import 'trip_details_screen.dart';
 
@@ -64,44 +68,95 @@ class TripsScreen extends ConsumerWidget {
                       hasLeading: false,
                       children: [
                         for (final trip in trips)
-                          CupertinoListTile.notched(
+                          _TripListRow(
                             key: ValueKey(trip.id),
-                            trailing: const CupertinoListTileChevron(),
-                            onTap: () => Navigator.of(context).push<void>(
-                              CupertinoPageRoute<void>(
-                                title: 'Trip Details',
-                                builder: (context) =>
-                                    TripDetailsScreen(tripId: trip.id),
-                              ),
-                            ),
-                            title: Text(
-                              trip.name,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            subtitle: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  trip.destination,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  '${formatDate(trip.startDate)}'
-                                  ' – ${formatDate(trip.endDate)}',
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ],
-                            ),
+                            trip: trip,
+                            screenContext: context,
+                            formatDate: formatDate,
                           ),
                       ],
                     ),
                   ],
                 ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TripListRow extends ConsumerWidget {
+  const _TripListRow({
+    super.key,
+    required this.trip,
+    required this.screenContext,
+    required this.formatDate,
+  });
+
+  final Trip trip;
+  final BuildContext screenContext;
+  final String Function(DateTime) formatDate;
+
+  Future<void> _deleteTrip(BuildContext context, WidgetRef ref) async {
+    final viewModel = ref.read(tripDeletionViewModelProvider(trip.id).notifier);
+    if (!viewModel.beginConfirmation()) return;
+    final confirmed = await showTripDeletionConfirmation(screenContext);
+    if (!context.mounted || !screenContext.mounted || confirmed != true) {
+      viewModel.cancelConfirmation();
+      return;
+    }
+    final result = await viewModel.deleteTrip();
+    if (!screenContext.mounted) return;
+    if (result == null) {
+      if (!context.mounted) return;
+      final error = ref.read(tripDeletionViewModelProvider(trip.id)).error;
+      if (error != null) {
+        await showTripDeletionError(screenContext, error);
+      }
+    } else if (result.photoCleanupPending) {
+      await showTripPhotoCleanupWarning(screenContext);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final deletion = ref.watch(tripDeletionViewModelProvider(trip.id));
+    return TripSwipeAction(
+      isBusy: deletion.isBusy,
+      onDelete: () => _deleteTrip(context, ref),
+      child: CupertinoListTile.notched(
+        trailing: deletion.isDeleting
+            ? Semantics(
+                label: 'Deleting trip',
+                liveRegion: true,
+                child: const CupertinoActivityIndicator(),
+              )
+            : const CupertinoListTileChevron(),
+        onTap: deletion.isBusy
+            ? null
+            : () => Navigator.of(context).push<void>(
+                CupertinoPageRoute<void>(
+                  title: 'Trip Details',
+                  builder: (context) => TripDetailsScreen(tripId: trip.id),
+                ),
+              ),
+        title: Text(trip.name, maxLines: 2, overflow: TextOverflow.ellipsis),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              trip.destination,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '${formatDate(trip.startDate)}'
+              ' – ${formatDate(trip.endDate)}',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
         ),
       ),
     );

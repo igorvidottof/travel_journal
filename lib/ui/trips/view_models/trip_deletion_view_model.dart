@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show KeepAliveLink;
 
 import '../../../app/dependencies.dart';
 import '../../../data/repositories/trip_repository.dart';
@@ -28,31 +29,52 @@ class TripDeletionViewModel extends Notifier<TripDeletionState> {
   TripDeletionViewModel(this.tripId);
 
   final String tripId;
+  KeepAliveLink? _confirmationLifetime;
 
   @override
   TripDeletionState build() => const TripDeletionState();
 
+  bool get _hasPhotoMutation {
+    final provider = tripPhotosViewModelProvider(tripId);
+    if (!ref.exists(provider)) return false;
+    final photos = ref.read(provider);
+    return photos.isSelecting || photos.deletingPhotoId != null;
+  }
+
   bool beginConfirmation() {
-    if (state.isBusy || ref.read(tripPhotosViewModelProvider(tripId)).isBusy) {
+    if (state.isBusy || _hasPhotoMutation) {
       return false;
     }
+    _confirmationLifetime = ref.keepAlive();
     state = const TripDeletionState(isConfirming: true);
     return true;
   }
 
-  void cancelConfirmation() => state = const TripDeletionState();
+  void _releaseConfirmation() {
+    _confirmationLifetime?.close();
+    _confirmationLifetime = null;
+  }
+
+  void cancelConfirmation() {
+    if (ref.mounted && !state.isDeleting) {
+      state = const TripDeletionState();
+    }
+    _releaseConfirmation();
+  }
 
   Future<TripDeletionResult?> deleteTrip() async {
     if (state.isDeleting) return null;
-    if (ref.read(tripPhotosViewModelProvider(tripId)).isBusy) {
+    if (_hasPhotoMutation) {
       state = const TripDeletionState(
         error: 'Please wait for the photo operation to finish, then try again.',
       );
+      _releaseConfirmation();
       return null;
     }
     final repository = ref.read(tripRepositoryProvider);
     final trips = ref.read(tripsViewModelProvider.notifier);
     final keepAlive = ref.keepAlive();
+    _releaseConfirmation();
     state = const TripDeletionState(isDeleting: true);
     TripDeletionResult result;
     try {

@@ -10,6 +10,7 @@ import '../view_models/trip_photos_view_model.dart';
 import '../view_models/trip_deletion_view_model.dart';
 import '../view_models/trips_view_model.dart';
 import 'trip_location_screen.dart';
+import 'trip_deletion_dialogs.dart';
 import 'edit_trip_screen.dart';
 
 class TripDetailsScreen extends ConsumerWidget {
@@ -23,28 +24,11 @@ class TripDetailsScreen extends ConsumerWidget {
     final navigator = Navigator.of(context);
     final warningContext = navigator.context;
     final tabs = ref.read(appTabViewModelProvider.notifier);
-    final confirmed = await showCupertinoDialog<bool>(
-      context: context,
-      builder: (dialogContext) => CupertinoAlertDialog(
-        title: const Text('Delete Trip?'),
-        content: const Text(
-          'This permanently deletes this trip and its saved photos. Photos in your library are kept.',
-        ),
-        actions: [
-          CupertinoDialogAction(
-            isDefaultAction: true,
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Cancel'),
-          ),
-          CupertinoDialogAction(
-            isDestructiveAction: true,
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
-    if (!context.mounted) return;
+    final confirmed = await showTripDeletionConfirmation(context);
+    if (!context.mounted) {
+      viewModel.cancelConfirmation();
+      return;
+    }
     if (confirmed != true) {
       viewModel.cancelConfirmation();
       return;
@@ -55,22 +39,7 @@ class TripDetailsScreen extends ConsumerWidget {
     navigator.popUntil((route) => route.isFirst);
     tabs.selectTrips();
     if (result.photoCleanupPending && warningContext.mounted) {
-      await showCupertinoDialog<void>(
-        context: warningContext,
-        builder: (dialogContext) => CupertinoAlertDialog(
-          title: const Text('Trip Deleted'),
-          content: const Text(
-            'Some saved photo files could not be removed yet. Cleanup will retry the next time trips are loaded, including when you reopen the app.',
-          ),
-          actions: [
-            CupertinoDialogAction(
-              isDefaultAction: true,
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('OK'),
-            ),
-          ],
-        ),
-      );
+      await showTripPhotoCleanupWarning(warningContext);
     }
   }
 
