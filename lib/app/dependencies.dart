@@ -1,6 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../data/repositories/maps_repository.dart';
+import '../data/repositories/maps_repository_apple.dart';
 import '../data/services/location_service.dart';
+import '../data/services/maps_service.dart';
 import '../data/repositories/trip_repository_persistent.dart';
 import '../data/repositories/photo_repository.dart';
 import '../data/repositories/photo_repository_picker.dart';
@@ -11,6 +14,12 @@ import '../data/services/photo_storage_service_local.dart';
 
 final locationServiceProvider = Provider<LocationService>(
   (ref) => LocationService(),
+);
+
+final mapsServiceProvider = Provider<MapsService>((ref) => MapsService());
+
+final mapsRepositoryProvider = Provider<MapsRepository>(
+  (ref) => MapsRepositoryApple(ref.watch(mapsServiceProvider)),
 );
 
 final storageServiceLocalProvider = Provider<StorageServiceLocal>(
