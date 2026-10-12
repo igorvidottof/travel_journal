@@ -25,6 +25,17 @@ class TripsViewModel extends AsyncNotifier<List<Trip>> {
     return List<Trip>.unmodifiable(await repository.getTrips());
   }
 
+  void removeDeletedTrip(String tripId) {
+    final current = state.asData?.value;
+    if (current != null) {
+      state = AsyncData(
+        List<Trip>.unmodifiable(current.where((trip) => trip.id != tripId)),
+      );
+    } else {
+      ref.invalidateSelf();
+    }
+  }
+
   /// Reload through build; AsyncValue exposes loading, data, and errors.
   void loadTrips() => ref.invalidateSelf();
 }

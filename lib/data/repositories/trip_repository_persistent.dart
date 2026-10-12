@@ -2,12 +2,14 @@ import '../../domain/models/trip.dart';
 import '../../domain/models/trip_location.dart';
 import '../services/storage_service_local.dart';
 import 'trip_repository.dart';
+import 'photo_repository.dart';
 
 /// Keeps trip IDs reachable after restarts so saved photo associations can load.
 class TripRepositoryPersistent implements TripRepository {
-  TripRepositoryPersistent(this._storage);
+  TripRepositoryPersistent(this._storage, this._photos);
 
   final StorageServiceLocal _storage;
+  final PhotoRepository _photos;
   Future<void> _pending = Future.value();
 
   Future<T> _serialize<T>(Future<T> Function() operation) {
@@ -16,9 +18,9 @@ class TripRepositoryPersistent implements TripRepository {
     return result;
   }
 
-  Future<List<Trip>> _load() async {
+  Future<_TripSnapshot> _load() async {
     final raw = await _storage.readJson('trips.json');
-    if (raw == null) return const [];
+    if (raw == null) return const _TripSnapshot([], {});
     if (raw is! Map<String, dynamic> ||
         raw['version'] != 1 ||
         raw['trips'] is! List) {
@@ -29,6 +31,7 @@ class TripRepositoryPersistent implements TripRepository {
     for (final entry in raw['trips'] as List<dynamic>) {
       if (entry is! Map<String, dynamic> ||
           entry['id'] is! String ||
+          !_validId(entry['id'] as String) ||
           entry['name'] is! String ||
           entry['destination'] is! String ||
           entry['startDate'] is! String ||
@@ -60,19 +63,80 @@ class TripRepositoryPersistent implements TripRepository {
         ),
       );
     }
-    return List.unmodifiable(trips);
+    final pending = <String>{};
+    final rawPending = raw['pendingPhotoDeletionIds'];
+    if (rawPending != null) {
+      if (rawPending is! List) {
+        throw const FormatException('Invalid pending photo cleanup');
+      }
+      for (final id in rawPending) {
+        if (id is! String ||
+            !_validId(id) ||
+            ids.contains(id) ||
+            !pending.add(id)) {
+          throw const FormatException('Invalid pending photo cleanup');
+        }
+      }
+    }
+    return _TripSnapshot(List.unmodifiable(trips), pending);
   }
 
   @override
-  Future<List<Trip>> getTrips() => _serialize(_load);
+  Future<List<Trip>> getTrips() => _serialize(() async {
+    final snapshot = await _load();
+    await _cleanPending(snapshot);
+    return snapshot.trips;
+  });
+
+  bool _validId(String id) => id.isNotEmpty && id != '.' && id != '..';
+
+  Future<Set<String>> _cleanPending(_TripSnapshot snapshot) async {
+    final remaining = {...snapshot.pending};
+    for (final id in snapshot.pending) {
+      try {
+        await _photos.deleteTripPhotos(id);
+        remaining.remove(id);
+      } on Exception {
+        // The durable queue survives a restart and is retried on the next load.
+      }
+    }
+    if (remaining.length != snapshot.pending.length) {
+      try {
+        await _commit(snapshot.trips, remaining);
+      } on Exception {
+        // Repeating completed cleanup is harmless if clearing the queue fails.
+        return snapshot.pending;
+      }
+    }
+    return remaining;
+  }
+
+  @override
+  Future<TripDeletionResult> deleteTrip(String tripId) => _serialize(() async {
+    final snapshot = await _load();
+    if (!snapshot.trips.any((trip) => trip.id == tripId)) {
+      throw Exception('Trip not found');
+    }
+    final remaining = snapshot.trips
+        .where((trip) => trip.id != tripId)
+        .toList();
+    final pending = {...snapshot.pending, tripId};
+    // Commit removal and cleanup intent together before touching any photos.
+    await _commit(remaining, pending);
+    final unfinished = await _cleanPending(_TripSnapshot(remaining, pending));
+    return TripDeletionResult(photoCleanupPending: unfinished.contains(tripId));
+  });
 
   @override
   Future<void> addTrip(Trip trip) => _serialize(() async {
-    final trips = await _load();
-    if (trips.any((existing) => existing.id == trip.id)) {
+    final snapshot = await _load();
+    final trips = snapshot.trips;
+    if (!_validId(trip.id) ||
+        snapshot.pending.contains(trip.id) ||
+        trips.any((existing) => existing.id == trip.id)) {
       throw const FormatException('Duplicate trip ID');
     }
-    await _commit([...trips, trip]);
+    await _commit([...trips, trip], snapshot.pending);
   });
 
   @override
@@ -83,7 +147,8 @@ class TripRepositoryPersistent implements TripRepository {
     required DateTime startDate,
     required DateTime endDate,
   }) => _serialize(() async {
-    final trips = await _load();
+    final snapshot = await _load();
+    final trips = snapshot.trips;
     if (!trips.any((trip) => trip.id == tripId)) {
       throw Exception('Trip not found');
     }
@@ -97,38 +162,48 @@ class TripRepositoryPersistent implements TripRepository {
                 endDate: endDate,
               )
             : trip,
-    ]);
+    ], snapshot.pending);
   });
 
   @override
   Future<void> setLocation(String tripId, TripLocation? location) =>
       _serialize(() async {
-        final trips = await _load();
+        final snapshot = await _load();
+        final trips = snapshot.trips;
         if (!trips.any((trip) => trip.id == tripId)) {
           throw Exception('Trip not found');
         }
         await _commit([
           for (final trip in trips)
             trip.id == tripId ? trip.withLocation(location) : trip,
-        ]);
+        ], snapshot.pending);
       });
 
-  Future<void> _commit(List<Trip> trips) => _storage.writeJson('trips.json', {
-    'version': 1,
-    'trips': [
-      for (final item in trips)
-        {
-          'id': item.id,
-          'name': item.name,
-          'destination': item.destination,
-          'startDate': item.startDate.toIso8601String(),
-          'endDate': item.endDate.toIso8601String(),
-          if (item.location != null)
-            'location': {
-              'latitude': item.location!.latitude,
-              'longitude': item.location!.longitude,
+  Future<void> _commit(List<Trip> trips, Set<String> pending) =>
+      _storage.writeJson('trips.json', {
+        'version': 1,
+        if (pending.isNotEmpty) 'pendingPhotoDeletionIds': pending.toList(),
+        'trips': [
+          for (final item in trips)
+            {
+              'id': item.id,
+              'name': item.name,
+              'destination': item.destination,
+              'startDate': item.startDate.toIso8601String(),
+              'endDate': item.endDate.toIso8601String(),
+              if (item.location != null)
+                'location': {
+                  'latitude': item.location!.latitude,
+                  'longitude': item.location!.longitude,
+                },
             },
-        },
-    ],
-  });
+        ],
+      });
+}
+
+class _TripSnapshot {
+  const _TripSnapshot(this.trips, this.pending);
+
+  final List<Trip> trips;
+  final Set<String> pending;
 }

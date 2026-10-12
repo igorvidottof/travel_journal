@@ -15,6 +15,33 @@ class PhotoStorageServiceLocal {
     return 'photos/${Uri.encodeComponent(tripId)}';
   }
 
+  /// Reads the trip snapshot directly, avoiding a dependency on the trip queue.
+  Future<bool> tripExists(String tripId) async {
+    final raw = await _storage.readJson('trips.json');
+    if (raw == null) return false;
+    if (raw is! Map<String, dynamic> ||
+        raw['version'] != 1 ||
+        raw['trips'] is! List) {
+      throw const FormatException('Invalid trip metadata');
+    }
+    return (raw['trips'] as List).any(
+      (entry) => entry is Map<String, dynamic> && entry['id'] == tripId,
+    );
+  }
+
+  /// Deletes only the app-owned copy directory, including its metadata.
+  /// Missing directories are already clean; failures remain retryable.
+  Future<void> deleteTripPhotos(String tripId) async {
+    final directory = await _storage.directory(_tripPath(tripId));
+    final type = await FileSystemEntity.type(
+      directory.path,
+      followLinks: false,
+    );
+    if (type != FileSystemEntityType.notFound) {
+      await directory.delete(recursive: true);
+    }
+  }
+
   Future<Object?> readMetadata(String tripId) =>
       _storage.readJson('${_tripPath(tripId)}/metadata.json');
 

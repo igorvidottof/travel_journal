@@ -23,6 +23,8 @@ class PhotoCollection {
 }
 
 abstract class PhotoRepository {
+  Future<void> deleteTripPhotos(String tripId);
+
   Future<PhotoCollection> getPhotos(String tripId);
 
   /// Copies the selected photo before committing its trip association.

@@ -54,5 +54,8 @@ final photoRepositoryProvider = Provider<PhotoRepository>(
 );
 
 final tripRepositoryProvider = Provider<TripRepository>(
-  (ref) => TripRepositoryPersistent(ref.watch(storageServiceLocalProvider)),
+  (ref) => TripRepositoryPersistent(
+    ref.watch(storageServiceLocalProvider),
+    ref.watch(photoRepositoryProvider),
+  ),
 );

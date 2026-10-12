@@ -5,7 +5,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../domain/models/trip.dart';
 import '../../../domain/models/trip_photo.dart';
+import '../../core/view_models/app_tab_view_model.dart';
 import '../view_models/trip_photos_view_model.dart';
+import '../view_models/trip_deletion_view_model.dart';
 import '../view_models/trips_view_model.dart';
 import 'trip_location_screen.dart';
 import 'edit_trip_screen.dart';
@@ -15,52 +17,116 @@ class TripDetailsScreen extends ConsumerWidget {
 
   final String tripId;
 
+  Future<void> _deleteTrip(BuildContext context, WidgetRef ref) async {
+    final viewModel = ref.read(tripDeletionViewModelProvider(tripId).notifier);
+    if (!viewModel.beginConfirmation()) return;
+    final navigator = Navigator.of(context);
+    final warningContext = navigator.context;
+    final tabs = ref.read(appTabViewModelProvider.notifier);
+    final confirmed = await showCupertinoDialog<bool>(
+      context: context,
+      builder: (dialogContext) => CupertinoAlertDialog(
+        title: const Text('Delete Trip?'),
+        content: const Text(
+          'This permanently deletes this trip and its saved photos. Photos in your library are kept.',
+        ),
+        actions: [
+          CupertinoDialogAction(
+            isDefaultAction: true,
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          CupertinoDialogAction(
+            isDestructiveAction: true,
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (!context.mounted) return;
+    if (confirmed != true) {
+      viewModel.cancelConfirmation();
+      return;
+    }
+    final result = await viewModel.deleteTrip();
+    if (!context.mounted || result == null) return;
+    if (!navigator.mounted) return;
+    navigator.popUntil((route) => route.isFirst);
+    tabs.selectTrips();
+    if (result.photoCleanupPending && warningContext.mounted) {
+      await showCupertinoDialog<void>(
+        context: warningContext,
+        builder: (dialogContext) => CupertinoAlertDialog(
+          title: const Text('Trip Deleted'),
+          content: const Text(
+            'Some saved photo files could not be removed yet. Cleanup will retry the next time trips are loaded, including when you reopen the app.',
+          ),
+          actions: [
+            CupertinoDialogAction(
+              isDefaultAction: true,
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final deletion = ref.watch(tripDeletionViewModelProvider(tripId));
     final trip = ref.watch(tripDetailsProvider(tripId));
     final loadedTrip = trip.isLoading || trip.hasError
         ? null
         : trip.asData?.value;
 
-    return CupertinoPageScaffold(
-      backgroundColor: CupertinoColors.systemGroupedBackground,
-      navigationBar: CupertinoNavigationBar(
-        middle: const Text('Trip Details'),
-        previousPageTitle: 'Trips',
-        trailing: CupertinoButton(
-          padding: EdgeInsets.zero,
-          onPressed: loadedTrip == null
-              ? null
-              : () => Navigator.of(context, rootNavigator: true).push<void>(
-                  CupertinoPageRoute(
-                    fullscreenDialog: true,
-                    builder: (context) => EditTripScreen(trip: loadedTrip),
+    return PopScope(
+      canPop: !deletion.isBusy,
+      child: CupertinoPageScaffold(
+        backgroundColor: CupertinoColors.systemGroupedBackground,
+        navigationBar: CupertinoNavigationBar(
+          middle: const Text('Trip Details'),
+          previousPageTitle: 'Trips',
+          trailing: CupertinoButton(
+            padding: EdgeInsets.zero,
+            onPressed: loadedTrip == null || deletion.isBusy
+                ? null
+                : () => Navigator.of(context, rootNavigator: true).push<void>(
+                    CupertinoPageRoute(
+                      fullscreenDialog: true,
+                      builder: (context) => EditTripScreen(trip: loadedTrip),
+                    ),
                   ),
-                ),
-          child: const Text('Edit'),
+            child: const Text('Edit'),
+          ),
         ),
-      ),
-      child: SafeArea(
-        child: trip.when(
-          loading: () => Center(
-            child: Semantics(
-              label: 'Loading trip',
-              liveRegion: true,
-              child: const CupertinoActivityIndicator(),
+        child: SafeArea(
+          child: trip.when(
+            loading: () => Center(
+              child: Semantics(
+                label: 'Loading trip',
+                liveRegion: true,
+                child: const CupertinoActivityIndicator(),
+              ),
             ),
+            error: (error, stackTrace) => _DetailsStatus(
+              title: 'Unable to load trip',
+              message: 'Please try again.',
+              onRetry: ref.read(tripsViewModelProvider.notifier).loadTrips,
+            ),
+            data: (trip) => trip == null
+                ? const _DetailsStatus(
+                    title: 'Trip not found',
+                    message:
+                        'This trip is no longer available. Go back to Trips.',
+                  )
+                : _TripDetails(
+                    trip: trip,
+                    onDelete: () => _deleteTrip(context, ref),
+                  ),
           ),
-          error: (error, stackTrace) => _DetailsStatus(
-            title: 'Unable to load trip',
-            message: 'Please try again.',
-            onRetry: ref.read(tripsViewModelProvider.notifier).loadTrips,
-          ),
-          data: (trip) => trip == null
-              ? const _DetailsStatus(
-                  title: 'Trip not found',
-                  message:
-                      'This trip is no longer available. Go back to Trips.',
-                )
-              : _TripDetails(trip: trip),
         ),
       ),
     );
@@ -68,9 +134,10 @@ class TripDetailsScreen extends ConsumerWidget {
 }
 
 class _TripDetails extends ConsumerWidget {
-  const _TripDetails({required this.trip});
+  const _TripDetails({required this.trip, required this.onDelete});
 
   final Trip trip;
+  final VoidCallback onDelete;
 
   Future<void> _addPhoto(BuildContext context, WidgetRef ref) async {
     final source = await showCupertinoModalPopup<PhotoSource>(
@@ -94,6 +161,7 @@ class _TripDetails extends ConsumerWidget {
       ),
     );
     if (source == null || !context.mounted) return;
+    if (ref.read(tripDeletionViewModelProvider(trip.id)).isBusy) return;
     await ref
         .read(tripPhotosViewModelProvider(trip.id).notifier)
         .selectPhoto(source);
@@ -125,6 +193,7 @@ class _TripDetails extends ConsumerWidget {
       ),
     );
     if (confirmed != true || !context.mounted) return;
+    if (ref.read(tripDeletionViewModelProvider(trip.id)).isBusy) return;
     await ref
         .read(tripPhotosViewModelProvider(trip.id).notifier)
         .deletePhoto(photo.id);
@@ -133,6 +202,7 @@ class _TripDetails extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final photos = ref.watch(tripPhotosViewModelProvider(trip.id));
+    final deletion = ref.watch(tripDeletionViewModelProvider(trip.id));
     final localizations = CupertinoLocalizations.of(context);
     String formatDate(DateTime date) =>
         '${localizations.datePickerMediumDate(date)}, '
@@ -170,11 +240,14 @@ class _TripDetails extends ConsumerWidget {
                     'Choose a pin or use your current location',
               ),
               trailing: const CupertinoListTileChevron(),
-              onTap: () => Navigator.of(context).push<void>(
-                CupertinoPageRoute(
-                  builder: (context) => TripLocationScreen(tripId: trip.id),
-                ),
-              ),
+              onTap: deletion.isBusy
+                  ? null
+                  : () => Navigator.of(context).push<void>(
+                      CupertinoPageRoute(
+                        builder: (context) =>
+                            TripLocationScreen(tripId: trip.id),
+                      ),
+                    ),
             ),
           ],
         ),
@@ -182,105 +255,151 @@ class _TripDetails extends ConsumerWidget {
           header: const Text('MEMORIES'),
           hasLeading: false,
           children: [
-            Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                children: [
-                  if (photos.isLoading) ...[
-                    const CupertinoActivityIndicator(),
-                    const SizedBox(height: 8),
-                    const Text('Loading saved photos…'),
-                  ] else if (photos.photos.isEmpty && !photos.loadFailed) ...[
-                    Icon(
-                      CupertinoIcons.photo,
-                      size: 40,
-                      color: CupertinoColors.secondaryLabel.resolveFrom(
-                        context,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Semantics(
-                      header: true,
-                      child: Text(
-                        'No memories yet',
-                        style: CupertinoTheme.of(
+            SizedBox(
+              width: double.infinity,
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  children: [
+                    if (photos.isLoading) ...[
+                      const CupertinoActivityIndicator(),
+                      const SizedBox(height: 8),
+                      const Text('Loading saved photos…'),
+                    ] else if (photos.photos.isEmpty && !photos.loadFailed) ...[
+                      Icon(
+                        CupertinoIcons.photo,
+                        size: 40,
+                        color: CupertinoColors.secondaryLabel.resolveFrom(
                           context,
-                        ).textTheme.navTitleTextStyle,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Your trip photos will appear here.',
-                      textAlign: TextAlign.center,
-                    ),
-                  ] else if (photos.photos.isNotEmpty) ...[
-                    for (final photo in photos.photos)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: Column(
-                          children: [
-                            _PhotoPreview(
-                              path: photo.path,
-                              isMissing: photo.isMissing,
-                            ),
-                            CupertinoButton(
-                              onPressed: photos.isBusy || photos.loadFailed
-                                  ? null
-                                  : () => _deletePhoto(context, ref, photo),
-                              child: photos.deletingPhotoId == photo.id
-                                  ? const CupertinoActivityIndicator()
-                                  : Text(
-                                      'Delete Photo',
-                                      style: TextStyle(
-                                        color: CupertinoColors.systemRed
-                                            .resolveFrom(context),
-                                      ),
-                                    ),
-                            ),
-                          ],
                         ),
                       ),
-                  ],
-                  if (photos.error != null) ...[
-                    const SizedBox(height: 12),
-                    Semantics(
-                      liveRegion: true,
-                      child: Text(
-                        photos.error!,
+                      const SizedBox(height: 12),
+                      Semantics(
+                        header: true,
+                        child: Text(
+                          'No memories yet',
+                          style: CupertinoTheme.of(
+                            context,
+                          ).textTheme.navTitleTextStyle,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Your trip photos will appear here.',
                         textAlign: TextAlign.center,
+                      ),
+                    ] else if (photos.photos.isNotEmpty) ...[
+                      for (final photo in photos.photos)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: Column(
+                            children: [
+                              _PhotoPreview(
+                                path: photo.path,
+                                isMissing: photo.isMissing,
+                              ),
+                              CupertinoButton(
+                                onPressed:
+                                    deletion.isBusy ||
+                                        photos.isBusy ||
+                                        photos.loadFailed
+                                    ? null
+                                    : () => _deletePhoto(context, ref, photo),
+                                child: photos.deletingPhotoId == photo.id
+                                    ? const CupertinoActivityIndicator()
+                                    : Text(
+                                        'Delete Photo',
+                                        style: TextStyle(
+                                          color: CupertinoColors.systemRed
+                                              .resolveFrom(context),
+                                        ),
+                                      ),
+                              ),
+                            ],
+                          ),
+                        ),
+                    ],
+                    if (photos.error != null) ...[
+                      const SizedBox(height: 12),
+                      Semantics(
+                        liveRegion: true,
+                        child: Text(
+                          photos.error!,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: CupertinoColors.systemRed.resolveFrom(
+                              context,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                    if (photos.error != null)
+                      CupertinoButton(
+                        onPressed: deletion.isBusy || photos.isBusy
+                            ? null
+                            : ref
+                                  .read(
+                                    tripPhotosViewModelProvider(
+                                      trip.id,
+                                    ).notifier,
+                                  )
+                                  .loadPhotos,
+                        child: const Text('Reload Photos'),
+                      ),
+                    const SizedBox(height: 16),
+                    CupertinoButton.filled(
+                      onPressed:
+                          deletion.isBusy || photos.isBusy || photos.loadFailed
+                          ? null
+                          : () => _addPhoto(context, ref),
+                      child: photos.isSelecting
+                          ? Semantics(
+                              label: 'Selecting and saving photo',
+                              liveRegion: true,
+                              child: const CupertinoActivityIndicator(),
+                            )
+                          : const Text('Add Photo'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+        CupertinoListSection.insetGrouped(
+          hasLeading: false,
+          children: [
+            CupertinoListTile(
+              title: CupertinoButton(
+                onPressed: deletion.isBusy || photos.isBusy ? null : onDelete,
+                child: deletion.isDeleting
+                    ? Semantics(
+                        label: 'Deleting trip',
+                        liveRegion: true,
+                        child: CupertinoActivityIndicator(),
+                      )
+                    : Text(
+                        'Delete Trip',
                         style: TextStyle(
                           color: CupertinoColors.systemRed.resolveFrom(context),
                         ),
                       ),
-                    ),
-                  ],
-                  if (photos.error != null)
-                    CupertinoButton(
-                      onPressed: photos.isBusy
-                          ? null
-                          : ref
-                                .read(
-                                  tripPhotosViewModelProvider(trip.id).notifier,
-                                )
-                                .loadPhotos,
-                      child: const Text('Reload Photos'),
-                    ),
-                  const SizedBox(height: 16),
-                  CupertinoButton.filled(
-                    onPressed: photos.isBusy || photos.loadFailed
-                        ? null
-                        : () => _addPhoto(context, ref),
-                    child: photos.isSelecting
-                        ? Semantics(
-                            label: 'Selecting and saving photo',
-                            liveRegion: true,
-                            child: const CupertinoActivityIndicator(),
-                          )
-                        : const Text('Add Photo'),
-                  ),
-                ],
               ),
             ),
+            if (deletion.error != null)
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Semantics(
+                  liveRegion: true,
+                  child: Text(
+                    deletion.error!,
+                    style: TextStyle(
+                      color: CupertinoColors.systemRed.resolveFrom(context),
+                    ),
+                  ),
+                ),
+              ),
           ],
         ),
       ],

@@ -24,6 +24,7 @@ class PhotoRepositoryPicker implements PhotoRepository {
   }
 
   Future<PhotoCollection> _load(String tripId) async {
+    await _requireTrip(tripId);
     final raw = await _storage.readMetadata(tripId);
     if (raw == null) {
       return _collection(tripId, []);
@@ -65,18 +66,28 @@ class PhotoRepositoryPicker implements PhotoRepository {
     return _collection(tripId, photos);
   }
 
-  Future<void> _commit(String tripId, List<TripPhoto> photos) =>
-      _storage.writeMetadata(tripId, {
-        'version': 1,
-        'photos': [
-          for (final photo in photos)
-            {
-              'id': photo.id,
-              'fileName': photo.fileName,
-              'createdAt': photo.createdAt.toUtc().toIso8601String(),
-            },
-        ],
-      });
+  Future<void> _requireTrip(String tripId) async {
+    if (!await _storage.tripExists(tripId)) throw Exception('Trip not found');
+  }
+
+  @override
+  Future<void> deleteTripPhotos(String tripId) =>
+      _serialize(() => _storage.deleteTripPhotos(tripId));
+
+  Future<void> _commit(String tripId, List<TripPhoto> photos) async {
+    await _requireTrip(tripId);
+    await _storage.writeMetadata(tripId, {
+      'version': 1,
+      'photos': [
+        for (final photo in photos)
+          {
+            'id': photo.id,
+            'fileName': photo.fileName,
+            'createdAt': photo.createdAt.toUtc().toIso8601String(),
+          },
+      ],
+    });
+  }
 
   Future<PhotoCollection> _collection(
     String tripId,
@@ -127,6 +138,7 @@ class PhotoRepositoryPicker implements PhotoRepository {
     final current = await _load(tripId);
     final selectedPath = await _selectPath(source);
     if (selectedPath == null) return current;
+    await _requireTrip(tripId);
     final id = List.generate(
       16,
       (_) => _random.nextInt(256).toRadixString(16).padLeft(2, '0'),

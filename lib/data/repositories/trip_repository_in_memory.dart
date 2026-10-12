@@ -34,6 +34,14 @@ class TripRepositoryInMemory implements TripRepository {
   Future<List<Trip>> getTrips() async => List<Trip>.unmodifiable(_trips);
 
   @override
+  Future<TripDeletionResult> deleteTrip(String tripId) async {
+    final index = _trips.indexWhere((trip) => trip.id == tripId);
+    if (index == -1) throw Exception('Trip not found');
+    _trips.removeAt(index);
+    return const TripDeletionResult();
+  }
+
+  @override
   Future<void> addTrip(Trip trip) async {
     _trips.add(trip);
   }
