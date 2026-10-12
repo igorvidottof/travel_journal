@@ -1,0 +1,20 @@
+# Project agent policy lives in AGENTS.md; role instructions live in agents/.
+# Keep the selected parent model, reasoning effort, and approval policy.
+# Role registry syntax verified with Codex CLI 0.137.0.
+[features]
+multi_agent = true
+
+[agents]
+max_threads = 3
+
+[agents.planner]
+description = "Inspect Travel Journal and plan substantial Flutter changes without editing files."
+config_file = "agents/planner.toml"
+
+[agents.developer]
+description = "Implement a bounded Travel Journal task following the coordinator's plan and assigned files."
+config_file = "agents/developer.toml"
+
+[agents.reviewer]
+description = "Independently review Travel Journal changes for bugs, regressions, and architectural violations."
+config_file = "agents/reviewer.toml"

@@ -24,6 +24,40 @@ current code and README before relying on older conversation suggestions.
   explaining meaningful interaction differences. If a task has no UI impact,
   state that there are no new platform-specific UI differences to report.
 
+## Multi-agent workflow
+
+- Use Codex subagents by default for substantial implementation requests, changes
+  across multiple layers, and investigations with independent questions. Handle
+  small edits and straightforward explanations directly. An explicit user request
+  for subagents takes precedence over this size guideline.
+- The main agent is the coordinator: define scope, delegate bounded tasks, resolve
+  findings, and deliver one concise explanation. Use project roles `planner`,
+  `developer`, and `reviewer` from `.codex/agents/` when supported by the client.
+- Ask `planner` to inspect the current implementation and propose files, steps,
+  architectural considerations, and validation without editing. For a clear
+  implementation request, the coordinator can accept the plan and continue;
+  request clarification only for missing requirements or consequential choices.
+- Give `developer` the accepted plan and explicit file ownership. Keep one writer
+  per file. Parallelize independent reading or disjoint implementation tasks only;
+  wait for dependent work before starting the next step. All agents share the
+  checkout, so each must preserve other agents' and the user's changes.
+- After implementation, ask `reviewer` to inspect the diff independently without
+  editing. Address actionable findings and request another focused review when
+  fixes materially change the reviewed behavior.
+- Pass applicable AGENTS.md rules and task context to every delegate. Subagents
+  must not spawn additional agents unless the coordinator explicitly assigns
+  further delegation. They report to the coordinator rather than asking the user
+  questions or duplicating English corrections.
+- The coordinator ensures required formatting and static analysis are completed
+  for Dart changes. Do not write or execute automated tests or manually run the
+  app. Report which agents contributed, what was verified, and any limitations.
+- Agents inherit the parent model and reasoning effort unless the user requests
+  otherwise. Keep permissions within the parent session's constraints. Planner
+  and Reviewer must remain read-only even if runtime settings override their
+  configured sandbox defaults. Do not commit or push unless requested.
+- If delegation tools or custom roles are unavailable, report the limitation and
+  continue the same workflow in the main agent without claiming subagents ran.
+
 ## Project scope and current baseline
 
 - Travel Journal is an iOS-style Flutter app using the standalone `cupertino_ui`
