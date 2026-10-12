@@ -168,6 +168,23 @@ class _TripDetails extends ConsumerWidget {
         .deletePhoto(photo.id);
   }
 
+  Future<void> _sharePhoto(
+    BuildContext buttonContext,
+    WidgetRef ref,
+    TripPhoto photo,
+  ) async {
+    if (ref.read(tripDeletionViewModelProvider(trip.id)).isBusy) return;
+    final box = buttonContext.findRenderObject();
+    if (box is! RenderBox || !box.hasSize) return;
+    // Measure the tapped button before the asynchronous file lookup.
+    final origin = (box.localToGlobal(Offset.zero) & box.size).intersect(
+      Offset.zero & MediaQuery.sizeOf(buttonContext),
+    );
+    await ref
+        .read(tripPhotosViewModelProvider(trip.id).notifier)
+        .sharePhoto(photo, origin);
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final photos = ref.watch(tripPhotosViewModelProvider(trip.id));
@@ -247,9 +264,9 @@ class _TripDetails extends ConsumerWidget {
                         header: true,
                         child: Text(
                           'No memories yet',
-                          style: CupertinoTheme.of(
-                            context,
-                          ).textTheme.navTitleTextStyle,
+                          style: CupertinoTheme.of(context)
+                              .textTheme
+                              .navTitleTextStyle,
                         ),
                       ),
                       const SizedBox(height: 8),
@@ -266,6 +283,28 @@ class _TripDetails extends ConsumerWidget {
                               _PhotoPreview(
                                 path: photo.path,
                                 isMissing: photo.isMissing,
+                              ),
+                              Builder(
+                                builder: (buttonContext) => CupertinoButton(
+                                  onPressed:
+                                      deletion.isBusy ||
+                                          photos.isBusy ||
+                                          photos.loadFailed
+                                      ? null
+                                      : () => _sharePhoto(
+                                          buttonContext,
+                                          ref,
+                                          photo,
+                                        ),
+                                  child: photos.sharingPhotoId == photo.id
+                                      ? Semantics(
+                                          label: 'Sharing photo',
+                                          liveRegion: true,
+                                          child:
+                                              const CupertinoActivityIndicator(),
+                                        )
+                                      : const Text('Share Photo'),
+                                ),
                               ),
                               CupertinoButton(
                                 onPressed:
@@ -309,9 +348,8 @@ class _TripDetails extends ConsumerWidget {
                             ? null
                             : ref
                                   .read(
-                                    tripPhotosViewModelProvider(
-                                      trip.id,
-                                    ).notifier,
+                                    tripPhotosViewModelProvider(trip.id)
+                                        .notifier,
                                   )
                                   .loadPhotos,
                         child: const Text('Reload Photos'),
@@ -476,9 +514,9 @@ class _DetailsStatus extends StatelessWidget {
                   child: Text(
                     title,
                     textAlign: TextAlign.center,
-                    style: CupertinoTheme.of(
-                      context,
-                    ).textTheme.navTitleTextStyle,
+                    style: CupertinoTheme.of(context)
+                        .textTheme
+                        .navTitleTextStyle,
                   ),
                 ),
                 const SizedBox(height: 8),

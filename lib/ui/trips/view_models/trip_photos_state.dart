@@ -6,6 +6,7 @@ class TripPhotosState {
     this.isLoading = false,
     this.isSelecting = false,
     this.deletingPhotoId,
+    this.sharingPhotoId,
     this.loadFailed = false,
     this.error,
   }) : photos = List.unmodifiable(photos);
@@ -14,8 +15,13 @@ class TripPhotosState {
   final bool isLoading;
   final bool isSelecting;
   final String? deletingPhotoId;
+  final String? sharingPhotoId;
   final bool loadFailed;
   final String? error;
 
-  bool get isBusy => isLoading || isSelecting || deletingPhotoId != null;
+  bool get isBusy =>
+      isLoading ||
+      isSelecting ||
+      deletingPhotoId != null ||
+      sharingPhotoId != null;
 }

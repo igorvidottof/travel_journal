@@ -4,6 +4,8 @@ import '../data/repositories/app_info_repository.dart';
 import '../data/repositories/app_info_repository_platform.dart';
 import '../data/repositories/maps_repository.dart';
 import '../data/repositories/maps_repository_apple.dart';
+import '../data/repositories/share_repository.dart';
+import '../data/repositories/share_repository_platform.dart';
 import '../data/services/location_service.dart';
 import '../data/services/app_info_service.dart';
 import '../data/services/maps_service.dart';
@@ -14,6 +16,7 @@ import '../data/repositories/trip_repository.dart';
 import '../data/services/storage_service_local.dart';
 import '../data/services/photo_service_picker.dart';
 import '../data/services/photo_storage_service_local.dart';
+import '../data/services/share_service.dart';
 
 final locationServiceProvider = Provider<LocationService>(
   (ref) => LocationService(),
@@ -43,6 +46,15 @@ final photoServicePickerProvider = Provider<PhotoServicePicker>(
 
 final photoStorageServiceLocalProvider = Provider<PhotoStorageServiceLocal>(
   (ref) => PhotoStorageServiceLocal(ref.watch(storageServiceLocalProvider)),
+);
+
+final shareServiceProvider = Provider<ShareService>((ref) => ShareService());
+
+final shareRepositoryProvider = Provider<ShareRepository>(
+  (ref) => ShareRepositoryPlatform(
+    ref.watch(shareServiceProvider),
+    ref.watch(photoStorageServiceLocalProvider),
+  ),
 );
 
 // App-scoped repositories serialize operations across transient view models.

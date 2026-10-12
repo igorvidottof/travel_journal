@@ -1,9 +1,11 @@
 import 'dart:async';
+import 'dart:ui';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/dependencies.dart';
 import '../../../data/repositories/photo_repository.dart';
+import '../../../data/repositories/share_repository.dart';
 import '../../../domain/models/trip_photo.dart';
 import 'trip_photos_state.dart';
 
@@ -105,6 +107,38 @@ class TripPhotosViewModel extends Notifier<TripPhotosState> {
         error: 'Unable to delete the photo. Please retry.',
       );
     } finally {
+      keepAlive.close();
+    }
+  }
+
+  Future<void> sharePhoto(TripPhoto photo, Rect origin) async {
+    if (state.isBusy || state.loadFailed) return;
+    final repository = ref.read(shareRepositoryProvider);
+    final keepAlive = ref.keepAlive();
+    final previous = state;
+    state = TripPhotosState(photos: previous.photos, sharingPhotoId: photo.id);
+    try {
+      final outcome = await repository.sharePhoto(
+        photo,
+        sharePositionOrigin: origin,
+      );
+      if (!ref.mounted) return;
+      final error = switch (outcome) {
+        PhotoShareOutcome.missingFile =>
+          'This saved photo file is missing and cannot be shared.',
+        PhotoShareOutcome.busy =>
+          'Another Share Sheet is open. Close it and try again.',
+        PhotoShareOutcome.failed =>
+          'Unable to share the photo. Please try again.',
+        // An unavailable result does not mean sharing failed: the platform
+        // may have opened the sheet without reporting the selected action.
+        PhotoShareOutcome.shared ||
+        PhotoShareOutcome.cancelled ||
+        PhotoShareOutcome.unavailable => previous.error,
+      };
+      state = TripPhotosState(photos: previous.photos, error: error);
+    } finally {
+      if (ref.mounted && state.sharingPhotoId != null) state = previous;
       keepAlive.close();
     }
   }

@@ -38,7 +38,9 @@ class TripDeletionViewModel extends Notifier<TripDeletionState> {
     final provider = tripPhotosViewModelProvider(tripId);
     if (!ref.exists(provider)) return false;
     final photos = ref.read(provider);
-    return photos.isSelecting || photos.deletingPhotoId != null;
+    return photos.isSelecting ||
+        photos.deletingPhotoId != null ||
+        photos.sharingPhotoId != null;
   }
 
   bool beginConfirmation() {
@@ -82,8 +84,7 @@ class TripDeletionViewModel extends Notifier<TripDeletionState> {
     } on Exception {
       if (ref.mounted) {
         state = const TripDeletionState(
-          error:
-              'Unable to delete the trip. Your trip and photos are still saved. Please try again.',
+          error: 'Unable to delete the trip. Your trip and photos are still saved. Please try again.',
         );
       }
       keepAlive.close();
