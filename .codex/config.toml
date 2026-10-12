@@ -2,7 +2,7 @@
 # Keep the selected parent model, reasoning effort, and approval policy.
 # Role registry syntax verified with Codex CLI 0.137.0.
 [features]
-multi_agent = true
+multi_agent = false
 
 [agents]
 max_threads = 3
