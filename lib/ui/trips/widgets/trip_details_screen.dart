@@ -8,6 +8,7 @@ import '../../../domain/models/trip_photo.dart';
 import '../view_models/trip_photos_view_model.dart';
 import '../view_models/trips_view_model.dart';
 import 'trip_location_screen.dart';
+import 'edit_trip_screen.dart';
 
 class TripDetailsScreen extends ConsumerWidget {
   const TripDetailsScreen({super.key, required this.tripId});
@@ -17,12 +18,27 @@ class TripDetailsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final trip = ref.watch(tripDetailsProvider(tripId));
+    final loadedTrip = trip.isLoading || trip.hasError
+        ? null
+        : trip.asData?.value;
 
     return CupertinoPageScaffold(
       backgroundColor: CupertinoColors.systemGroupedBackground,
-      navigationBar: const CupertinoNavigationBar(
-        middle: Text('Trip Details'),
+      navigationBar: CupertinoNavigationBar(
+        middle: const Text('Trip Details'),
         previousPageTitle: 'Trips',
+        trailing: CupertinoButton(
+          padding: EdgeInsets.zero,
+          onPressed: loadedTrip == null
+              ? null
+              : () => Navigator.of(context, rootNavigator: true).push<void>(
+                  CupertinoPageRoute(
+                    fullscreenDialog: true,
+                    builder: (context) => EditTripScreen(trip: loadedTrip),
+                  ),
+                ),
+          child: const Text('Edit'),
+        ),
       ),
       child: SafeArea(
         child: trip.when(

@@ -17,6 +17,20 @@ class Trip {
   final DateTime endDate;
   final TripLocation? location;
 
+  Trip withDetails({
+    required String name,
+    required String destination,
+    required DateTime startDate,
+    required DateTime endDate,
+  }) => Trip(
+    id: id,
+    name: name,
+    destination: destination,
+    startDate: startDate,
+    endDate: endDate,
+    location: location,
+  );
+
   Trip withLocation(TripLocation? location) => Trip(
     id: id,
     name: name,

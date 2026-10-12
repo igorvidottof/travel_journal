@@ -7,5 +7,13 @@ abstract class TripRepository {
 
   Future<void> addTrip(Trip trip);
 
+  Future<void> updateTripDetails(
+    String tripId, {
+    required String name,
+    required String destination,
+    required DateTime startDate,
+    required DateTime endDate,
+  });
+
   Future<void> setLocation(String tripId, TripLocation? location);
 }

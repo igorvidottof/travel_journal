@@ -76,6 +76,31 @@ class TripRepositoryPersistent implements TripRepository {
   });
 
   @override
+  Future<void> updateTripDetails(
+    String tripId, {
+    required String name,
+    required String destination,
+    required DateTime startDate,
+    required DateTime endDate,
+  }) => _serialize(() async {
+    final trips = await _load();
+    if (!trips.any((trip) => trip.id == tripId)) {
+      throw Exception('Trip not found');
+    }
+    await _commit([
+      for (final trip in trips)
+        trip.id == tripId
+            ? trip.withDetails(
+                name: name,
+                destination: destination,
+                startDate: startDate,
+                endDate: endDate,
+              )
+            : trip,
+    ]);
+  });
+
+  @override
   Future<void> setLocation(String tripId, TripLocation? location) =>
       _serialize(() async {
         final trips = await _load();

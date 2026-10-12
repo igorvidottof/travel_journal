@@ -2,22 +2,34 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/dependencies.dart';
 import '../../../domain/models/trip.dart';
-import 'create_trip_state.dart';
+import 'trip_form_state.dart';
 import 'trips_view_model.dart';
 
-final createTripViewModelProvider =
-    NotifierProvider.autoDispose<CreateTripViewModel, CreateTripState>(
-      CreateTripViewModel.new,
-    );
+final tripFormViewModelProvider = NotifierProvider.autoDispose
+    .family<TripFormViewModel, TripFormState, Trip?>(TripFormViewModel.new);
 
-class CreateTripViewModel extends Notifier<CreateTripState> {
+class TripFormViewModel extends Notifier<TripFormState> {
+  TripFormViewModel(this.initialTrip);
+
+  final Trip? initialTrip;
   static int _lastId = 0;
 
   @override
-  CreateTripState build() {
-    ref.watch(tripRepositoryProvider);
-    return const CreateTripState();
+  TripFormState build() {
+    final trip = initialTrip;
+    return TripFormState(
+      name: trip?.name ?? '',
+      destination: trip?.destination ?? '',
+      startDate: trip?.startDate,
+      endDate: trip?.endDate,
+    );
   }
+
+  bool get hasChanges =>
+      state.name.trim() != (initialTrip?.name.trim() ?? '') ||
+      state.destination.trim() != (initialTrip?.destination.trim() ?? '') ||
+      state.startDate != initialTrip?.startDate ||
+      state.endDate != initialTrip?.endDate;
 
   void updateName(String value) {
     if (state.isSaving || value == state.name) return;
@@ -71,20 +83,32 @@ class CreateTripViewModel extends Notifier<CreateTripState> {
     }
 
     final repository = ref.read(tripRepositoryProvider);
-    final trip = Trip(
-      id: _generateId(),
-      name: state.name.trim(),
-      destination: state.destination.trim(),
-      startDate: state.startDate!,
-      endDate: state.endDate!,
-    );
     // Finish the submission and refresh even if the form loses its listeners.
     final keepAlive = ref.keepAlive();
     state = state.copyWith(status: TripSubmissionStatus.saving);
 
     try {
       try {
-        await repository.addTrip(trip);
+        final trip = initialTrip;
+        if (trip == null) {
+          await repository.addTrip(
+            Trip(
+              id: _generateId(),
+              name: state.name.trim(),
+              destination: state.destination.trim(),
+              startDate: state.startDate!,
+              endDate: state.endDate!,
+            ),
+          );
+        } else {
+          await repository.updateTripDetails(
+            trip.id,
+            name: state.name.trim(),
+            destination: state.destination.trim(),
+            startDate: state.startDate!,
+            endDate: state.endDate!,
+          );
+        }
       } on Exception {
         if (ref.mounted) {
           state = state.copyWith(
@@ -97,7 +121,7 @@ class CreateTripViewModel extends Notifier<CreateTripState> {
 
       if (ref.mounted) {
         ref.invalidate(tripsViewModelProvider);
-        state = const CreateTripState(status: TripSubmissionStatus.success);
+        state = state.copyWith(status: TripSubmissionStatus.success);
       }
       return true;
     } finally {

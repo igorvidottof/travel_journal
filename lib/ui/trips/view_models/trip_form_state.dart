@@ -1,7 +1,7 @@
 enum TripSubmissionStatus { idle, saving, success, failure }
 
-class CreateTripState {
-  const CreateTripState({
+class TripFormState {
+  const TripFormState({
     this.name = '',
     this.destination = '',
     this.startDate,
@@ -19,7 +19,7 @@ class CreateTripState {
 
   bool get isSaving => status == TripSubmissionStatus.saving;
 
-  CreateTripState copyWith({
+  TripFormState copyWith({
     String? name,
     String? destination,
     DateTime? startDate,
@@ -29,7 +29,7 @@ class CreateTripState {
     TripSubmissionStatus status = TripSubmissionStatus.idle,
     String? error,
   }) {
-    return CreateTripState(
+    return TripFormState(
       name: name ?? this.name,
       destination: destination ?? this.destination,
       startDate: clearStartDate ? null : startDate ?? this.startDate,

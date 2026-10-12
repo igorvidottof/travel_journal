@@ -6,6 +6,24 @@ class TripRepositoryInMemory implements TripRepository {
   final List<Trip> _trips = [];
 
   @override
+  Future<void> updateTripDetails(
+    String tripId, {
+    required String name,
+    required String destination,
+    required DateTime startDate,
+    required DateTime endDate,
+  }) async {
+    final index = _trips.indexWhere((trip) => trip.id == tripId);
+    if (index == -1) throw Exception('Trip not found');
+    _trips[index] = _trips[index].withDetails(
+      name: name,
+      destination: destination,
+      startDate: startDate,
+      endDate: endDate,
+    );
+  }
+
+  @override
   Future<void> setLocation(String tripId, TripLocation? location) async {
     final index = _trips.indexWhere((trip) => trip.id == tripId);
     if (index == -1) throw Exception('Trip not found');
