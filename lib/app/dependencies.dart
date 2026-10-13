@@ -17,6 +17,46 @@ import '../data/services/storage_service_local.dart';
 import '../data/services/photo_service_picker.dart';
 import '../data/services/photo_storage_service_local.dart';
 import '../data/services/share_service.dart';
+import '../data/services/notification_service.dart';
+import '../data/repositories/notification_repository.dart';
+import '../data/repositories/notification_repository_platform.dart';
+import '../data/repositories/trip_reminder_repository.dart';
+import '../data/repositories/trip_reminder_repository_local.dart';
+import '../domain/use_cases/synchronize_trip_reminders_use_case.dart';
+import '../data/services/timezone_service.dart';
+import '../data/repositories/timezone_repository.dart';
+import '../data/repositories/timezone_repository_platform.dart';
+
+final timezoneServiceProvider = Provider<TimezoneService>(
+  (ref) => TimezoneService(),
+);
+
+final timezoneRepositoryProvider = Provider<TimezoneRepository>(
+  (ref) => TimezoneRepositoryPlatform(ref.watch(timezoneServiceProvider)),
+);
+
+final notificationServiceProvider = Provider<NotificationService>(
+  (ref) => NotificationService(ref.watch(timezoneServiceProvider)),
+);
+
+final notificationRepositoryProvider = Provider<NotificationRepository>(
+  (ref) =>
+      NotificationRepositoryPlatform(ref.watch(notificationServiceProvider)),
+);
+
+final tripReminderRepositoryProvider = Provider<TripReminderRepository>(
+  (ref) => TripReminderRepositoryLocal(ref.watch(storageServiceLocalProvider)),
+);
+
+final synchronizeTripRemindersUseCaseProvider =
+    Provider<SynchronizeTripRemindersUseCase>((ref) {
+      return SynchronizeTripRemindersUseCase(
+        ref.watch(tripReminderRepositoryProvider),
+        ref.watch(notificationRepositoryProvider),
+        ref.watch(tripRepositoryProvider),
+        ref.watch(timezoneRepositoryProvider),
+      );
+    });
 
 final locationServiceProvider = Provider<LocationService>(
   (ref) => LocationService(),

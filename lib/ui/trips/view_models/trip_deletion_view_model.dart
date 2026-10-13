@@ -5,6 +5,7 @@ import '../../../app/dependencies.dart';
 import '../../../data/repositories/trip_repository.dart';
 import 'trip_photos_view_model.dart';
 import 'trips_view_model.dart';
+import '../../settings/view_models/trip_reminders_view_model.dart';
 
 class TripDeletionState {
   const TripDeletionState({
@@ -74,6 +75,7 @@ class TripDeletionViewModel extends Notifier<TripDeletionState> {
       return null;
     }
     final repository = ref.read(tripRepositoryProvider);
+    final reminders = ref.read(tripRemindersViewModelProvider.notifier);
     final trips = ref.read(tripsViewModelProvider.notifier);
     final keepAlive = ref.keepAlive();
     _releaseConfirmation();
@@ -84,13 +86,15 @@ class TripDeletionViewModel extends Notifier<TripDeletionState> {
     } on Exception {
       if (ref.mounted) {
         state = const TripDeletionState(
-          error: 'Unable to delete the trip. Your trip and photos are still saved. Please try again.',
+          error:
+              'Unable to delete the trip. Your trip and photos are still saved. Please try again.',
         );
       }
       keepAlive.close();
       return null;
     }
     // A committed deletion is success even when later refresh/cleanup is pending.
+    await reminders.synchronize();
     if (ref.mounted) {
       trips.removeDeletedTrip(tripId);
       ref.invalidate(tripPhotosViewModelProvider(tripId));

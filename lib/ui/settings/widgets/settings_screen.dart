@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../view_models/settings_view_model.dart';
 import 'settings_row.dart';
 import 'settings_section.dart';
+import 'trip_reminders_section.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -36,13 +37,6 @@ class SettingsScreen extends ConsumerWidget {
               title: 'Preferences',
               children: [
                 SettingsRow.information(
-                  title: 'Notifications',
-                  description:
-                      'This setting will let you manage notifications from Travel Journal. Notification controls are not available yet.',
-                  icon: CupertinoIcons.bell_fill,
-                  iconColor: CupertinoColors.systemRed,
-                ),
-                SettingsRow.information(
                   title: 'Language',
                   description:
                       'Travel Journal currently uses English. Choosing another app language is coming in a future update.',
@@ -52,6 +46,7 @@ class SettingsScreen extends ConsumerWidget {
                 ),
               ],
             ),
+            const TripRemindersSection(),
             const SettingsSection(
               title: 'Data & Storage',
               children: [

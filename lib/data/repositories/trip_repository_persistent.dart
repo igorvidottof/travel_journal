@@ -136,7 +136,8 @@ class TripRepositoryPersistent implements TripRepository {
         trips.any((existing) => existing.id == trip.id)) {
       throw const FormatException('Duplicate trip ID');
     }
-    await _commit([...trips, trip], snapshot.pending);
+    final updated = [...trips, trip];
+    await _commit(updated, snapshot.pending);
   });
 
   @override
@@ -152,7 +153,7 @@ class TripRepositoryPersistent implements TripRepository {
     if (!trips.any((trip) => trip.id == tripId)) {
       throw Exception('Trip not found');
     }
-    await _commit([
+    final updated = [
       for (final trip in trips)
         trip.id == tripId
             ? trip.withDetails(
@@ -162,7 +163,8 @@ class TripRepositoryPersistent implements TripRepository {
                 endDate: endDate,
               )
             : trip,
-    ], snapshot.pending);
+    ];
+    await _commit(updated, snapshot.pending);
   });
 
   @override

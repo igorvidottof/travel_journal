@@ -4,6 +4,7 @@ import '../../../app/dependencies.dart';
 import '../../../domain/models/trip.dart';
 import 'trip_form_state.dart';
 import 'trips_view_model.dart';
+import '../../settings/view_models/trip_reminders_view_model.dart';
 
 final tripFormViewModelProvider = NotifierProvider.autoDispose
     .family<TripFormViewModel, TripFormState, Trip?>(TripFormViewModel.new);
@@ -83,6 +84,7 @@ class TripFormViewModel extends Notifier<TripFormState> {
     }
 
     final repository = ref.read(tripRepositoryProvider);
+    final reminders = ref.read(tripRemindersViewModelProvider.notifier);
     // Finish the submission and refresh even if the form loses its listeners.
     final keepAlive = ref.keepAlive();
     state = state.copyWith(status: TripSubmissionStatus.saving);
@@ -119,6 +121,7 @@ class TripFormViewModel extends Notifier<TripFormState> {
         return false;
       }
 
+      await reminders.synchronize();
       if (ref.mounted) {
         ref.invalidate(tripsViewModelProvider);
         state = state.copyWith(status: TripSubmissionStatus.success);
